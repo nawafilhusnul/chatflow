@@ -2,20 +2,120 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --primary-color: #4F46E5;
+  --primary-hover: #4338CA;
+  --secondary-color: #9333EA;
+  --background-light: #F9FAFB;
+  --background-white: #FFFFFF;
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-tertiary: #6B7280;
+  --border-color: #E5E7EB;
+  --success-color: #10B981;
+  --error-color: #EF4444;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--background-light);
+  color: var(--text-primary);
+}
+
+/* Modern scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Custom components */
+.chat-container {
+  @apply flex h-[calc(100vh-4rem)] bg-gray-50;
+}
+
+.chat-sidebar {
+  @apply w-80 bg-white border-r border-gray-200 flex flex-col;
+}
+
+.chat-main {
+  @apply flex-1 flex flex-col bg-white;
+}
+
+.message-bubble {
+  @apply max-w-[70%] rounded-2xl px-4 py-2 mb-2;
+}
+
+.message-bubble-sent {
+  @apply bg-indigo-600 text-white ml-auto rounded-br-none;
+}
+
+.message-bubble-received {
+  @apply bg-gray-100 text-gray-900 rounded-bl-none;
+}
+
+.btn-primary {
+  @apply px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 
+         transition-colors duration-200 font-medium focus:outline-none 
+         focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 bg-white text-gray-700 rounded-lg border border-gray-300 
+         hover:bg-gray-50 transition-colors duration-200 font-medium 
+         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2;
+}
+
+.input-primary {
+  @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 
+         focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none
+         transition-colors duration-200;
+}
+
+.chat-header {
+  @apply bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between;
+}
+
+.chat-messages {
+  @apply flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-50;
+}
+
+.chat-input {
+  @apply border-t border-gray-200 px-6 py-4 bg-white;
+}
+
+.sidebar-header {
+  @apply p-6 border-b border-gray-200;
+}
+
+.chat-room-item {
+  @apply p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 
+         transition-colors duration-200;
+}
+
+.chat-room-item-active {
+  @apply bg-indigo-50 hover:bg-indigo-100;
+}
+
+.avatar {
+  @apply w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center 
+         text-gray-500 font-medium;
+}
+
+.badge {
+  @apply bg-indigo-600 text-white text-xs font-medium px-2.5 py-0.5 rounded-full;
 }

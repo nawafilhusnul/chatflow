@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { useEffect, useRef, useState } from "react";
+import { Html5Qrcode } from "html5-qrcode";
 
 interface QRScannerProps {
   onScan: (scannedUserId: string) => void;
@@ -24,11 +24,11 @@ export default function QRScanner({ onScan, onError }: QRScannerProps) {
     try {
       const devices = await Html5Qrcode.getCameras();
       if (devices && devices.length) {
-        const html5QrcodeScanner = new Html5Qrcode('reader');
+        const html5QrcodeScanner = new Html5Qrcode("reader");
         html5QrCode.current = html5QrcodeScanner;
 
         await html5QrcodeScanner.start(
-          { facingMode: 'environment' },
+          { facingMode: "environment" },
           {
             fps: 10,
             qrbox: { width: 250, height: 250 },
@@ -47,8 +47,8 @@ export default function QRScanner({ onScan, onError }: QRScannerProps) {
         setIsScanning(true);
       }
     } catch (err) {
-      console.error('Error starting QR scanner:', err);
-      onError?.('Failed to start camera');
+      console.error("Error starting QR scanner:", err);
+      onError?.("Failed to start camera");
     }
   };
 

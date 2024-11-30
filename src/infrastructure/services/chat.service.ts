@@ -13,6 +13,9 @@ import {
   onSnapshot,
   writeBatch,
   increment,
+  setDoc,
+  deleteField,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/core/config/firebase';
 
@@ -49,7 +52,7 @@ class ChatService {
     const q = query(
       collection(db, 'chatRooms'),
       where('participants', 'array-contains', userId),
-      orderBy('lastMessage.timestamp', 'desc')
+      orderBy('createdAt', 'desc')
     );
 
     try {
@@ -81,10 +84,21 @@ class ChatService {
     const existingChat = await this.findExistingPrivateChat(user1Id, user2Id);
     if (existingChat) return existingChat;
 
+    const timestamp = Timestamp.now();
     const chatRoom = {
       type: 'private',
       participants: [user1Id, user2Id],
-      createdAt: Timestamp.now(),
+      createdAt: timestamp,
+      lastMessage: {
+        text: 'Chat created',
+        timestamp: timestamp,
+        senderId: user1Id,
+        readBy: { [user1Id]: true, [user2Id]: false }
+      },
+      unreadCount: {
+        [user1Id]: 0,
+        [user2Id]: 1
+      }
     };
 
     const docRef = await addDoc(collection(db, 'chatRooms'), chatRoom);
@@ -323,7 +337,7 @@ class ChatService {
   }
 
   // Find existing private chat between two users
-  private async findExistingPrivateChat(user1Id: string, user2Id: string) {
+  async findExistingPrivateChat(user1Id: string, user2Id: string): Promise<ChatRoom | null> {
     const q = query(
       collection(db, 'chatRooms'),
       where('type', '==', 'private'),
@@ -331,12 +345,96 @@ class ChatService {
     );
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.find((doc) => {
+    const chat = snapshot.docs.find(doc => {
       const data = doc.data();
-      return (
-        data.participants.includes(user2Id) && data.participants.length === 2
-      );
+      return data.participants.includes(user2Id);
     });
+
+    if (chat) {
+      return {
+        id: chat.id,
+        ...chat.data()
+      } as ChatRoom;
+    }
+
+    return null;
+  }
+
+  // Get or create a private chat between two users
+  async getOrCreateDirectChat(user1Id: string, user2Id: string): Promise<ChatRoom> {
+    // First try to find an existing chat
+    const existingChat = await this.findExistingPrivateChat(user1Id, user2Id);
+    if (existingChat) {
+      return existingChat;
+    }
+
+    // If no existing chat is found, create a new one
+    return this.createPrivateChat(user1Id, user2Id);
+  }
+
+  // Get all direct chats for a user
+  async getDirectChats(userId: string): Promise<ChatRoom[]> {
+    try {
+      const chatsRef = collection(db, 'chatRooms');
+      const q = query(
+        chatsRef,
+        where('type', '==', 'private'),
+        where('participants', 'array-contains', userId)
+      );
+
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data() as ChatRoom
+      }));
+    } catch (error) {
+      console.error('Error getting direct chats:', error);
+      throw error;
+    }
+  }
+
+  // Remove participant from a group chat
+  async removeParticipant(roomId: string, participantId: string) {
+    try {
+      const roomRef = doc(db, 'chatRooms', roomId);
+      const roomDoc = await getDoc(roomRef);
+
+      if (!roomDoc.exists()) {
+        throw new Error('Chat room not found');
+      }
+
+      const room = roomDoc.data();
+      if (!room.type === 'group') {
+        throw new Error('Cannot remove participant from non-group chat');
+      }
+
+      // Remove participant from the room
+      await updateDoc(roomRef, {
+        participants: arrayRemove(participantId)
+      });
+
+    } catch (error) {
+      console.error('Error removing participant:', error);
+      throw error;
+    }
+  }
+
+  // Update group details
+  async updateGroupDetails(roomId: string, data: {
+    name?: string;
+    description?: string;
+    photoURL?: string;
+  }) {
+    try {
+      const roomRef = doc(db, 'chatRooms', roomId);
+      await updateDoc(roomRef, {
+        ...data,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating group details:', error);
+      throw error;
+    }
   }
 }
 
