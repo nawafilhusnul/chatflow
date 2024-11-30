@@ -12,6 +12,8 @@ import {
   arrayRemove,
   runTransaction,
   serverTimestamp,
+  orderBy,
+  limit,
 } from "firebase/firestore";
 import { db } from "@/core/config/firebase";
 import QRCode from "qrcode";
@@ -96,53 +98,48 @@ class UserService implements IUserService {
   // Get user profile by ID
   async getUserProfile(userId: string) {
     try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
+      const userDoc = await getDoc(doc(db, "users", userId));
       if (!userDoc.exists()) {
-        throw new Error('User not found');
+        throw new Error("User not found");
       }
       return userDoc.data();
     } catch (error) {
-      console.error('Error getting user profile:', error);
+      console.error("Error getting user profile:", error);
       throw error;
     }
   }
 
-  // Search users by email, username, or ID
+  // Search users by exact email or username match
   async searchUsers(searchQuery: string): Promise<UserProfile[]> {
-    searchQuery = searchQuery.trim().toLowerCase();
-
-    // If empty query, return empty result
-    if (!searchQuery) return [];
-
-    // If query looks like an email
-    if (searchQuery.includes("@")) {
-      const emailQuery = query(
-        collection(db, "users"),
-        where("email", "==", searchQuery)
-      );
-      const snapshot = await getDocs(emailQuery);
-      return snapshot.docs.map((doc) => ({ uid: doc.id, ...doc.data() } as UserProfile));
-    }
-
-    // Try to find by username (case insensitive)
-    const usernameQuery = query(
-      collection(db, "users"),
-      where("username", ">=", searchQuery),
-      where("username", "<=", searchQuery + "\uf8ff")
-    );
-    const usernameSnapshot = await getDocs(usernameQuery);
-    const usernameResults = usernameSnapshot.docs.map((doc) => ({ uid: doc.id, ...doc.data() } as UserProfile));
-
-    // If we found results by username, return them
-    if (usernameResults.length > 0) {
-      return usernameResults;
-    }
-
-    // Try to find by ID
     try {
-      const user = await this.getUserProfile(searchQuery);
-      return [user];
+      searchQuery = searchQuery.trim().toLowerCase();
+      if (!searchQuery) return [];
+
+      const usersRef = collection(db, "users");
+      const results: UserProfile[] = [];
+
+      // Search by exact email match
+      const emailQuery = query(usersRef, where("email", "==", searchQuery));
+      const emailSnapshot = await getDocs(emailQuery);
+      emailSnapshot.docs.forEach((doc) => {
+        results.push({ uid: doc.id, ...doc.data() } as UserProfile);
+      });
+
+      // Search by exact username match
+      const usernameQuery = query(
+        usersRef,
+        where("username", "==", searchQuery)
+      );
+      const usernameSnapshot = await getDocs(usernameQuery);
+      usernameSnapshot.docs.forEach((doc) => {
+        if (!results.find((u) => u.uid === doc.id)) {
+          results.push({ uid: doc.id, ...doc.data() } as UserProfile);
+        }
+      });
+
+      return results;
     } catch (error) {
+      console.error("Error searching users:", error);
       return [];
     }
   }
@@ -155,7 +152,7 @@ class UserService implements IUserService {
     const doc = snapshot.docs[0];
     return {
       uid: doc.id,
-      ...doc.data()
+      ...doc.data(),
     } as UserProfile;
   }
 
@@ -167,7 +164,7 @@ class UserService implements IUserService {
     const doc = snapshot.docs[0];
     return {
       uid: doc.id,
-      ...doc.data()
+      ...doc.data(),
     } as UserProfile;
   }
 
@@ -181,12 +178,12 @@ class UserService implements IUserService {
     }
   ) {
     try {
-      await updateDoc(doc(db, 'users', userId), {
+      await updateDoc(doc(db, "users", userId), {
         ...data,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
-      console.error('Error updating profile:', error);
+      console.error("Error updating profile:", error);
       throw error;
     }
   }
@@ -218,7 +215,7 @@ class UserService implements IUserService {
     if (!userDoc.exists()) return null;
     return {
       uid: userDoc.id,
-      ...userDoc.data()
+      ...userDoc.data(),
     } as UserProfile;
   }
 
@@ -335,26 +332,33 @@ class UserService implements IUserService {
       const senderFriends = senderData.friends || [];
       const receiverFriends = receiverData.friends || [];
 
-      if (senderFriends.includes(receiverId) || receiverFriends.includes(senderId)) {
+      if (
+        senderFriends.includes(receiverId) ||
+        receiverFriends.includes(senderId)
+      ) {
         throw new Error("Already friends");
       }
 
       // Check if request already sent
       const senderSentRequests = senderData.friendRequests.sent || [];
-      const receiverReceivedRequests = receiverData.friendRequests.received || [];
+      const receiverReceivedRequests =
+        receiverData.friendRequests.received || [];
 
-      if (senderSentRequests.includes(receiverId) || receiverReceivedRequests.includes(senderId)) {
+      if (
+        senderSentRequests.includes(receiverId) ||
+        receiverReceivedRequests.includes(senderId)
+      ) {
         throw new Error("Friend request already sent");
       }
 
       // Update sender's document first
       await updateDoc(senderRef, {
-        'friendRequests.sent': arrayUnion(receiverId),
+        "friendRequests.sent": arrayUnion(receiverId),
       });
 
       // Then update receiver's document
       await updateDoc(receiverRef, {
-        'friendRequests.received': arrayUnion(senderId),
+        "friendRequests.received": arrayUnion(senderId),
       });
     } catch (error) {
       console.error("Error sending friend request:", error);
@@ -482,22 +486,22 @@ class UserService implements IUserService {
   async removeFriend(userId: string, friendId: string) {
     try {
       const batch = writeBatch(db);
-      
+
       // Remove from user's friends list
-      const userRef = doc(db, 'users', userId);
+      const userRef = doc(db, "users", userId);
       batch.update(userRef, {
-        friends: arrayRemove(friendId)
+        friends: arrayRemove(friendId),
       });
 
       // Remove from friend's friends list
-      const friendRef = doc(db, 'users', friendId);
+      const friendRef = doc(db, "users", friendId);
       batch.update(friendRef, {
-        friends: arrayRemove(userId)
+        friends: arrayRemove(userId),
       });
 
       await batch.commit();
     } catch (error) {
-      console.error('Error removing friend:', error);
+      console.error("Error removing friend:", error);
       throw error;
     }
   }

@@ -11,11 +11,18 @@ import {
   sendPasswordResetEmail,
 } from "firebase/auth";
 import { auth } from "@/core/config/firebase";
-import { userService } from "@/infrastructure/services/user.service"; // Assuming userService is defined in this file
+import { userService } from "@/infrastructure/services/user.service";
 
 export interface AuthError {
   code: string;
   message: string;
+}
+
+interface UserProfileData {
+  fullName?: string;
+  displayName?: string;
+  phoneNumber?: string;
+  [key: string]: any;
 }
 
 interface UseAuth {
@@ -25,7 +32,8 @@ interface UseAuth {
   register: (
     email: string,
     password: string,
-    username?: string
+    username: string,
+    profileData: UserProfileData
   ) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -79,7 +87,8 @@ export const useAuth = (): UseAuth => {
   const register = async (
     email: string,
     password: string,
-    username?: string
+    username: string,
+    profileData: UserProfileData
   ): Promise<void> => {
     try {
       setLoading(true);
@@ -100,11 +109,15 @@ export const useAuth = (): UseAuth => {
         password
       );
 
-      // Create user profile with username
+      // Create user profile with all data
       if (userCredential.user) {
         await userService.upsertProfile(userCredential.user.uid, {
+          uid: userCredential.user.uid,
           email,
           username,
+          ...profileData,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         });
         await sendEmailVerification(userCredential.user);
       }

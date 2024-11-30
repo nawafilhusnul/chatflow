@@ -1,20 +1,28 @@
 export interface UserProfile {
-  id: string;
+  uid: string;
   email: string;
-  username?: string;
-  displayName?: string;
+  username: string;
+  fullName: string;
+  displayName: string;
+  phoneNumber: string;
   photoURL?: string;
-  status?: string;
-  qrCode?: string;
-  lastSeen?: Date;
+  friends?: string[];
+  friendRequests?: {
+    sent: string[];
+    received: string[];
+  };
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface IUserService {
   upsertProfile(userId: string, data: Partial<UserProfile>): Promise<UserProfile>;
-  getUserProfile(userId: string): Promise<UserProfile>;
+  getProfile(userId: string): Promise<UserProfile | null>;
   searchUsers(query: string): Promise<UserProfile[]>;
-  updateProfile(userId: string, data: Partial<UserProfile>): Promise<void>;
-  getUserByQRCode(scannedUserId: string): Promise<UserProfile>;
-  updateLastSeen(userId: string): Promise<void>;
-  isUsernameTaken(username: string): Promise<boolean>;
+  sendFriendRequest(fromUserId: string, toUserId: string): Promise<void>;
+  acceptFriendRequest(userId: string, friendId: string): Promise<void>;
+  rejectFriendRequest(userId: string, friendId: string): Promise<void>;
+  getFriendRequests(userId: string): Promise<UserProfile[]>;
+  getFriends(userId: string): Promise<UserProfile[]>;
+  removeFriend(userId: string, friendId: string): Promise<void>;
 }

@@ -16,6 +16,7 @@ import {
   setDoc,
   deleteField,
   serverTimestamp,
+  arrayRemove,
 } from 'firebase/firestore';
 import { db } from '@/core/config/firebase';
 
@@ -34,6 +35,7 @@ export interface ChatRoom {
   groupAdmin?: string; // Only for group chats
   unreadCount?: { [userId: string]: number };
   activeUsers?: { [userId: string]: boolean };
+  displayNames?: { [userId: string]: string }; // Custom display names for private chats
 }
 
 export interface Message {
@@ -52,7 +54,7 @@ class ChatService {
     const q = query(
       collection(db, 'chatRooms'),
       where('participants', 'array-contains', userId),
-      orderBy('createdAt', 'desc')
+      orderBy('lastMessage.timestamp', 'desc')
     );
 
     try {
@@ -189,69 +191,57 @@ class ChatService {
     }
   }
 
-  // Send a message
-  async sendMessage(chatId: string, senderId: string, text: string) {
-    if (!chatId || !senderId || !text.trim()) {
-      throw new Error('Chat ID, sender ID, and message text are required');
-    }
-
-    const chatRef = doc(db, 'chatRooms', chatId);
-    const chatDoc = await getDoc(chatRef);
-    
-    if (!chatDoc.exists()) {
-      throw new Error('Chat room not found');
-    }
-
-    const chatData = chatDoc.data() as ChatRoom;
-    const readBy: { [key: string]: boolean } = {};
-    const unreadCountUpdate: { [key: string]: number } = {};
-    
-    // Get active users in the room
-    const activeUsers = chatData.activeUsers || {};
-    
-    // Initialize read status for all participants
-    chatData.participants.forEach(participantId => {
-      // Message is marked as read if user is active in the room or is the sender
-      readBy[participantId] = activeUsers[participantId] === true || participantId === senderId;
-      
-      // Only increment unread count for inactive users who aren't the sender
-      if (!readBy[participantId]) {
-        unreadCountUpdate[`unreadCount.${participantId}`] = increment(1);
-      } else {
-        unreadCountUpdate[`unreadCount.${participantId}`] = 0;
-      }
-    });
-
-    const message = {
-      text: text.trim(),
-      senderId,
-      timestamp: Timestamp.now(),
-      readBy
-    };
-
-    const batch = writeBatch(db);
-
-    // Add message to messages subcollection
-    const messageRef = doc(collection(db, 'chatRooms', chatId, 'messages'));
-    batch.set(messageRef, message);
-
-    // Update last message and unread counts in chat room
-    batch.update(chatRef, {
-      lastMessage: {
-        text: message.text,
-        timestamp: message.timestamp,
-        senderId: message.senderId,
-        readBy: message.readBy
-      },
-      ...unreadCountUpdate
-    });
-
+  // Send a message to a chat room
+  async sendMessage(roomId: string, senderId: string, text: string) {
     try {
-      await batch.commit();
-      return {
-        id: messageRef.id,
-        ...message
+      const roomRef = doc(db, 'chatRooms', roomId);
+      const roomDoc = await getDoc(roomRef);
+      
+      if (!roomDoc.exists()) {
+        throw new Error('Chat room not found');
+      }
+
+      const room = roomDoc.data() as ChatRoom;
+      const batch = writeBatch(db);
+      const messageRef = doc(collection(db, 'chatRooms', roomId, 'messages'));
+      
+      // Initialize readBy object with all participants set to false except sender
+      const readBy: { [key: string]: boolean } = {};
+      room.participants.forEach(participantId => {
+        readBy[participantId] = participantId === senderId;
+      });
+
+      const message = {
+        text,
+        senderId,
+        timestamp: serverTimestamp(),
+        readBy
       };
+
+      // Add the message
+      batch.set(messageRef, message);
+
+      // Update last message and increment unread counter for all participants except sender
+      const updateData: any = {
+        lastMessage: {
+          text,
+          senderId,
+          timestamp: serverTimestamp(),
+          readBy
+        }
+      };
+
+      // Increment unread counter for all participants except sender
+      room.participants.forEach(participantId => {
+        if (participantId !== senderId) {
+          updateData[`unreadCount.${participantId}`] = increment(1);
+        }
+      });
+
+      batch.update(roomRef, updateData);
+      await batch.commit();
+
+      return messageRef.id;
     } catch (error) {
       console.error('Error sending message:', error);
       throw error;
@@ -290,34 +280,31 @@ class ChatService {
     }
   }
 
-  // Mark messages as read
-  async markMessagesAsRead(chatId: string, userId: string) {
-    const chatRef = doc(db, 'chatRooms', chatId);
-    const messagesRef = collection(db, 'chatRooms', chatId, 'messages');
-    
-    const batch = writeBatch(db);
-
+  // Mark messages as read for a user
+  async markMessagesAsRead(roomId: string, userId: string) {
     try {
-      // Get all messages that are not read by this user
+      const roomRef = doc(db, 'chatRooms', roomId);
+      const messagesRef = collection(db, 'chatRooms', roomId, 'messages');
+      const batch = writeBatch(db);
+
+      // Get all unread messages
       const q = query(
         messagesRef,
-        where(`readBy.${userId}`, '!=', true)
+        where(`readBy.${userId}`, '==', false)
       );
-      
-      const unreadSnapshot = await getDocs(q);
-      
+      const snapshot = await getDocs(q);
+
       // Mark each message as read
-      unreadSnapshot.docs.forEach((doc) => {
+      snapshot.docs.forEach(doc => {
         batch.update(doc.ref, {
           [`readBy.${userId}`]: true
         });
       });
 
-      // Update the chat room
-      batch.update(chatRef, {
+      // Reset unread counter for this user
+      batch.update(roomRef, {
         [`unreadCount.${userId}`]: 0,
-        [`lastMessage.readBy.${userId}`]: true,
-        [`activeUsers.${userId}`]: true
+        [`lastMessage.readBy.${userId}`]: true
       });
 
       await batch.commit();
@@ -435,6 +422,24 @@ class ChatService {
       console.error('Error updating group details:', error);
       throw error;
     }
+  }
+
+  // Update display name for a private chat room
+  async updateRoomDisplayName(roomId: string, userId: string, displayName: string) {
+    if (!roomId || !userId) throw new Error('Room ID and User ID are required');
+    
+    const roomRef = doc(db, 'chatRooms', roomId);
+    const roomDoc = await getDoc(roomRef);
+    
+    if (!roomDoc.exists()) throw new Error('Chat room not found');
+    
+    const room = roomDoc.data() as ChatRoom;
+    if (room.type !== 'private') throw new Error('Display name can only be set for private chats');
+    if (!room.participants.includes(userId)) throw new Error('User is not a participant of this chat');
+    
+    await updateDoc(roomRef, {
+      [`displayNames.${userId}`]: displayName
+    });
   }
 }
 
