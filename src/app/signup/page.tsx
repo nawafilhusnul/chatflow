@@ -41,7 +41,12 @@ export default function SignUp() {
         throw new Error("Password must be at least 6 characters long");
       }
 
-      if (!formData.username.trim() || !formData.fullName.trim() || !formData.displayName.trim() || !formData.phoneNumber.trim()) {
+      if (
+        !formData.username.trim() ||
+        !formData.fullName.trim() ||
+        !formData.displayName.trim() ||
+        !formData.phoneNumber.trim()
+      ) {
         throw new Error("All fields are required");
       }
 

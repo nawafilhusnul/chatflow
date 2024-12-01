@@ -13,10 +13,16 @@ export interface UserProfile {
   };
   createdAt?: Date;
   updatedAt?: Date;
+  lastSeen?: Date;
+  status?: string;
+  qrCode?: string;
 }
 
 export interface IUserService {
-  upsertProfile(userId: string, data: Partial<UserProfile>): Promise<UserProfile>;
+  upsertProfile(
+    userId: string,
+    data: Partial<UserProfile>
+  ): Promise<UserProfile>;
   getProfile(userId: string): Promise<UserProfile | null>;
   searchUsers(query: string): Promise<UserProfile[]>;
   sendFriendRequest(fromUserId: string, toUserId: string): Promise<void>;
